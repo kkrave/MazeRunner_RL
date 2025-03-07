@@ -3,35 +3,37 @@ import music
     
 # Q-learning parameters
 training_speed = 1   #set to control the speed that the agent moves through the maze during training
-num_episodes = 50    #set to control the number of training episodes that will run 
+num_episodes = 20    #set to control the number of training episodes that will run
 alpha = 0.4  # Learning rate
-gamma = .9  # Discount factor
-epsilon_0 = 1.0  # Start with full exploration
-epsilon_min = 0.01  # Lower minimum to favor exploitation later
+gamma = 1  # Discount factor
+epsilon_0 = 1.0  # Initially, the Agent will always make random exploration 
+epsilon_min = 0.01  # minimum value for epsilon; during training there is always some chance for exploration
 epsilon_decay = 0.95  # Slower decay for more exploration
 
 # Settings for showing Qtables during Training
-show_Qtable_after_each_STEP = False   #start with this True to see how the Qvalues are updated for each step
-show_Qtable_after_each_EPISODE = True   
+show_Qtable_after_each_STEP = False   #set to True to see how the Qvalues are updated for each step
+show_Qtable_after_each_EPISODE = True
 show_Qtable_after_TRAINING = False
 is_paused = False
 
-# Define the maze on the microbit 5x5 LED array (1 = wall, 0 = open path)
+# Define the maze on the microbit 5x5 LED array (1 = wall, 0 = open path, 2 = agent start position, 9 = goal)
 maze = [
-    [0, 1, 0, 0, 0],
+    [2, 1, 0, 0, 0],
     [0, 1, 1, 1, 0],
     [0, 1, 0, 0, 0],
-    [0, 1, 0, 1, 0], 
-    [0, 0, 0, 1, 0]
+    [0, 1, 0, 1, 0],
+    [9, 0, 0, 1, 0]
 ]
 
 #Goal position
-goal_row = 4  # row of the goal position (0-4)
-goal_col = 4  # column of the goal position (0-4)
+goal_rowcol = findinMaze(9)
+goal_row = goal_rowcol[0]   # row of the goal position (0-4)
+goal_col = goal_rowcol[1]  # column of the goal position (0-4)
 
 #Agent starting position
-Agent_row_0 = 0  # row of the agent starting position (0-4)
-Agent_col_0 = 0  # column of the agent starting position (0-4)
+Agent_rowcol = findinMaze(2)
+Agent_row_0 = Agent_rowcol[0]  # row of the agent starting position (0-4)
+Agent_col_0 = Agent_rowcol[1] # column of the agent starting position (0-4)
 
 # Initialize Q-table as a 5x5 grid with a single Q-value for each position in the maze
 Qtable = [
@@ -51,6 +53,7 @@ move_y = [-1, 1, 0, 0]
 show_maze()
 pause(1000)  # Brief pause to view the maze before agent appears
 led.plot_brightness(Agent_col_0, Agent_row_0, 255)
+led.plot_brightness(goal_col, goal_row, 128)
 
 # Run multiple training episodes on button A
 def on_button_pressed_a():
@@ -62,6 +65,7 @@ def on_button_pressed_a():
         episode_reward = 0
     
         led.plot_brightness(Agent_col, Agent_row, 255)
+        led.plot_brightness(goal_col, goal_row, 128)
         pause(100/training_speed)
         #print("Episode " + str(episode + 1) + " Start: " + str(Agent_col) + " " + str(Agent_row) + " Goal: " + str(goal_col) + " " + str(goal_row))
     
@@ -98,7 +102,7 @@ def on_button_pressed_a():
                 is_paused = True
             while is_paused == True:
                 pause(1000)
-            update_agent_position(old_Agent_col, old_Agent_row, next_Agent_col, next_Agent_row)        
+            update_agent_position(old_Agent_col, old_Agent_row, next_Agent_col, next_Agent_row)
             Agent_col = next_Agent_col
             Agent_row = next_Agent_row
 
@@ -108,6 +112,7 @@ def on_button_pressed_a():
         epsilon = max(epsilon * epsilon_decay, epsilon_min)  # decay epsilon for next episode
         
     print("Training Complete")
+    led.plot_brightness(goal_col, goal_row, 128)
     if show_Qtable_after_TRAINING == True:
             show_Qtable()
 input.on_button_pressed(Button.A, on_button_pressed_a)
@@ -170,7 +175,6 @@ def on_button_pressed_b():
         Agent_row = next_Agent_row
         steps += 1  #count the steps taken for intelligent run
     
-    led.toggle(goal_col, goal_row)
     print("Intelligent run complete in " + str(steps) + " steps. Reward = " + str(episode_reward))
 
 input.on_button_pressed(Button.B, on_button_pressed_b)
@@ -187,7 +191,7 @@ def update_agent_position(old_x, old_y, new_x, new_y):
     pause(500/training_speed)  # Brief delay to make movement visible
     if (new_x == goal_col and new_y == goal_row):
         play_ding()
-        for i in range(5):
+        for i in range(6):
             led.toggle(goal_col, goal_row)
             pause(500/training_speed)
     
@@ -261,9 +265,15 @@ def show_Qtable():
 def on_logo_pressed():
     if show_Qtable_after_each_STEP == True:
         global is_paused
-        is_paused = False          
+        is_paused = False
     else:
         global training_speed
         training_speed = training_speed*2
 input.on_logo_event(TouchButtonEvent.PRESSED, on_logo_pressed)
 
+def findinMaze(num):
+    for i in range(5):
+        for j in range(5):
+            if maze[i][j] == num:
+                return (i, j)
+    return ()

@@ -1,35 +1,37 @@
 //  Q-learning parameters
 let training_speed = 1
 // set to control the speed that the agent moves through the maze during training
-let num_episodes = 50
-// set to control the number of training episodes that will run 
+let num_episodes = 20
+// set to control the number of training episodes that will run
 let alpha = 0.4
 //  Learning rate
-let gamma = .9
+let gamma = 1
 //  Discount factor
 let epsilon_0 = 1.0
-//  Start with full exploration
+//  Initially, the Agent will always make random exploration 
 let epsilon_min = 0.01
-//  Lower minimum to favor exploitation later
+//  minimum value for epsilon; during training there is always some chance for exploration
 let epsilon_decay = 0.95
 //  Slower decay for more exploration
 //  Settings for showing Qtables during Training
 let show_Qtable_after_each_STEP = false
-// start with this True to see how the Qvalues are updated for each step
+// set to True to see how the Qvalues are updated for each step
 let show_Qtable_after_each_EPISODE = true
 let show_Qtable_after_TRAINING = false
 let is_paused = false
-//  Define the maze on the microbit 5x5 LED array (1 = wall, 0 = open path)
-let maze = [[0, 1, 0, 0, 0], [0, 1, 1, 1, 0], [0, 1, 0, 0, 0], [0, 1, 0, 1, 0], [0, 0, 0, 1, 0]]
+//  Define the maze on the microbit 5x5 LED array (1 = wall, 0 = open path, 2 = agent start position, 9 = goal)
+let maze = [[2, 1, 0, 0, 0], [0, 1, 1, 1, 0], [0, 1, 0, 0, 0], [0, 1, 0, 1, 0], [9, 0, 0, 1, 0]]
 // Goal position
-let goal_row = 4
+let goal_rowcol = findinMaze(9)
+let goal_row = goal_rowcol[0]
 //  row of the goal position (0-4)
-let goal_col = 4
+let goal_col = goal_rowcol[1]
 //  column of the goal position (0-4)
 // Agent starting position
-let Agent_row_0 = 0
+let Agent_rowcol = findinMaze(2)
+let Agent_row_0 = Agent_rowcol[0]
 //  row of the agent starting position (0-4)
-let Agent_col_0 = 0
+let Agent_col_0 = Agent_rowcol[1]
 //  column of the agent starting position (0-4)
 //  Initialize Q-table as a 5x5 grid with a single Q-value for each position in the maze
 let Qtable = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]]
@@ -43,6 +45,7 @@ show_maze()
 pause(1000)
 //  Brief pause to view the maze before agent appears
 led.plotBrightness(Agent_col_0, Agent_row_0, 255)
+led.plotBrightness(goal_col, goal_row, 128)
 //  Run multiple training episodes on button A
 input.onButtonPressed(Button.A, function on_button_pressed_a() {
     let Agent_row: number;
@@ -64,6 +67,7 @@ input.onButtonPressed(Button.A, function on_button_pressed_a() {
         Agent_col = Agent_col_0
         episode_reward = 0
         led.plotBrightness(Agent_col, Agent_row, 255)
+        led.plotBrightness(goal_col, goal_row, 128)
         pause(100 / training_speed)
         // print("Episode " + str(episode + 1) + " Start: " + str(Agent_col) + " " + str(Agent_row) + " Goal: " + str(goal_col) + " " + str(goal_row))
         while (Agent_col != goal_col || Agent_row != goal_row) {
@@ -121,6 +125,7 @@ input.onButtonPressed(Button.A, function on_button_pressed_a() {
     }
     //  decay epsilon for next episode
     console.log("Training Complete")
+    led.plotBrightness(goal_col, goal_row, 128)
     if (show_Qtable_after_TRAINING == true) {
         show_Qtable()
     }
@@ -209,7 +214,6 @@ input.onButtonPressed(Button.B, function on_button_pressed_b() {
         steps += 1
     }
     // count the steps taken for intelligent run
-    led.toggle(goal_col, goal_row)
     console.log("Intelligent run complete in " + ("" + steps) + " steps. Reward = " + ("" + episode_reward))
 })
 //  Function to update the agent's position
@@ -229,7 +233,7 @@ function update_agent_position(old_x: number, old_y: number, new_x: number, new_
     //  Brief delay to make movement visible
     if (new_x == goal_col && new_y == goal_row) {
         play_ding()
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 6; i++) {
             led.toggle(goal_col, goal_row)
             pause(500 / training_speed)
         }
@@ -343,3 +347,15 @@ input.onLogoEvent(TouchButtonEvent.Pressed, function on_logo_pressed() {
     }
     
 })
+function findinMaze(num: number): number[] {
+    for (let i = 0; i < 5; i++) {
+        for (let j = 0; j < 5; j++) {
+            if (maze[i][j] == num) {
+                return [i, j]
+            }
+            
+        }
+    }
+    return []
+}
+
