@@ -3,9 +3,8 @@ import music
     
 # Q-learning parameters
 training_speed = 1   #set to control the speed that the agent moves through the maze during training
-num_episodes = 20    #set to control the number of training episodes that will run
-alpha = 0.4  # Learning rate
-gamma = 1  # Discount factor
+num_episodes = 50    #set to control the number of training episodes that will run
+alpha = 0.3  # Learning rate
 epsilon_0 = 1.0  # Initially, the Agent will always make random exploration 
 epsilon_min = 0.01  # minimum value for epsilon; during training there is always some chance for exploration
 epsilon_decay = 0.95  # Slower decay for more exploration
@@ -18,12 +17,14 @@ is_paused = False
 
 # Define the maze on the microbit 5x5 LED array (1 = wall, 0 = open path, 2 = agent start position, 9 = goal)
 maze = [
-    [2, 1, 0, 0, 0],
+    [2, 1, 9, 0, 0],
     [0, 1, 1, 1, 0],
-    [0, 1, 0, 0, 0],
-    [0, 1, 0, 1, 0],
-    [9, 0, 0, 1, 0]
+    [0, 0, 0, 0, 0],
+    [0, 1, 1, 1, 0],
+    [0, 0, 0, 1, 0]
 ]
+
+##################################################################
 
 #Goal position
 goal_rowcol = findinMaze(9)
@@ -43,7 +44,6 @@ Qtable = [
     [0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0]
 ]
-Qtable[goal_row][goal_col] = 10   #set the reward for hitting the goal
 
 # Define possible moves [Up, Down, Left, Right]
 move_x = [0, 0, -1, 1]
@@ -68,7 +68,7 @@ def on_button_pressed_a():
         led.plot_brightness(goal_col, goal_row, 128)
         pause(100/training_speed)
         #print("Episode " + str(episode + 1) + " Start: " + str(Agent_col) + " " + str(Agent_row) + " Goal: " + str(goal_col) + " " + str(goal_row))
-    
+        steps = 0
         while (Agent_col != goal_col or Agent_row != goal_row):
             next_Agent_col = 0  #initialize the next agent position
             next_Agent_row = 0
@@ -91,26 +91,27 @@ def on_button_pressed_a():
             #update Qvalue
             old_q_value = Qtable[old_Agent_row][old_Agent_col]
             if next_Agent_col == goal_col and next_Agent_row == goal_row:
+                Qtable[goal_row][goal_col] = reward
                 new_q_value = old_q_value + alpha * (reward - old_q_value)  # Terminal state: no future reward
             else:
                 next_max_q = max_q_value(next_Agent_col, next_Agent_row)
-                new_q_value = old_q_value + alpha * (reward + gamma * next_max_q - old_q_value)
+                new_q_value = old_q_value + alpha * (reward + next_max_q - old_q_value) 
             Qtable[old_Agent_row][old_Agent_col] = Math.round(new_q_value * 100) / 100
+            steps += 1
             if show_Qtable_after_each_STEP == True:
+                print("Step " + steps + " from (" + old_Agent_row + "," + old_Agent_col + ") to (" + next_Agent_row + "," + next_Agent_col + ")...updated Qvalue for  (" + old_Agent_row + "," + old_Agent_col + ") is " + new_q_value)
                 show_Qtable()
                 global is_paused
                 is_paused = True
+            update_agent_position(old_Agent_col, old_Agent_row, next_Agent_col, next_Agent_row)
             while is_paused == True:
                 pause(1000)
-            update_agent_position(old_Agent_col, old_Agent_row, next_Agent_col, next_Agent_row)
             Agent_col = next_Agent_col
             Agent_row = next_Agent_row
-
         print("Episode: " + str(episode + 1) + "   Epsilon= " + str(Math.round(epsilon * 1000) / 1000) + "   Reward= " + str(episode_reward))
         if show_Qtable_after_each_EPISODE == True:
             show_Qtable()
         epsilon = max(epsilon * epsilon_decay, epsilon_min)  # decay epsilon for next episode
-        
     print("Training Complete")
     led.plot_brightness(goal_col, goal_row, 128)
     if show_Qtable_after_TRAINING == True:
@@ -130,9 +131,7 @@ def get_valid_random_move(Agent_col, Agent_row):
             next_state[0] = proposed_x
             next_state[1] = proposed_y
             return next_state
-        #print(i + ": Random move rejected: [" + str(Agent_col) + "][" + str(Agent_row) + "] to [" + str(proposed_x) + "][" + str(proposed_y) + "]")
         attempts += 1
-    # Fallback: return a valid move if all attempts fail
 
 # Function to get a valid greedy move (allows walls)
 def get_valid_greedy_move(Agent_col, Agent_row):
@@ -162,14 +161,17 @@ def on_button_pressed_b():
     pause(500)
     steps = 0
     while (Agent_col != goal_col or Agent_row != goal_row):
-        old_x = Agent_col # Store current position
-        old_y = Agent_row
-        next_state = get_valid_greedy_move(Agent_col, Agent_row)
+        if maze[Agent_row][Agent_col] == 1:
+            next_state = [old_Agent_col, old_Agent_row]  #if hitting a wall force return to previous position
+        else:
+            next_state = get_valid_greedy_move(Agent_col, Agent_row)
         next_Agent_col = next_state[0]
         next_Agent_row = next_state[1]
+        old_Agent_col = Agent_col # Store current position
+        old_Agent_row = Agent_row
         reward = get_reward(next_Agent_col, next_Agent_row)
         episode_reward += reward  #count the total reward for the intelligent run
-        update_agent_position(old_x, old_y, next_Agent_col, next_Agent_row)
+        update_agent_position(old_Agent_col, old_Agent_row, next_Agent_col, next_Agent_row)
         pause(500)
         Agent_col = next_Agent_col
         Agent_row = next_Agent_row
@@ -195,13 +197,12 @@ def update_agent_position(old_x, old_y, new_x, new_y):
             led.toggle(goal_col, goal_row)
             pause(500/training_speed)
     
-
 # Get reward of the next move
 def get_reward(new_x, new_y):
     if (new_x == goal_col and new_y == goal_row):
         reward = 10
     elif maze[new_y][new_x] == 1:
-        reward = -10
+        reward = -5
     else:
         reward = -1
     return reward

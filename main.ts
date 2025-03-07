@@ -1,12 +1,10 @@
 //  Q-learning parameters
 let training_speed = 1
 // set to control the speed that the agent moves through the maze during training
-let num_episodes = 20
+let num_episodes = 50
 // set to control the number of training episodes that will run
-let alpha = 0.4
+let alpha = 0.3
 //  Learning rate
-let gamma = 1
-//  Discount factor
 let epsilon_0 = 1.0
 //  Initially, the Agent will always make random exploration 
 let epsilon_min = 0.01
@@ -20,7 +18,8 @@ let show_Qtable_after_each_EPISODE = true
 let show_Qtable_after_TRAINING = false
 let is_paused = false
 //  Define the maze on the microbit 5x5 LED array (1 = wall, 0 = open path, 2 = agent start position, 9 = goal)
-let maze = [[2, 1, 0, 0, 0], [0, 1, 1, 1, 0], [0, 1, 0, 0, 0], [0, 1, 0, 1, 0], [9, 0, 0, 1, 0]]
+let maze = [[2, 1, 9, 0, 0], [0, 1, 1, 1, 0], [0, 0, 0, 0, 0], [0, 1, 1, 1, 0], [0, 0, 0, 1, 0]]
+// #################################################################
 // Goal position
 let goal_rowcol = findinMaze(9)
 let goal_row = goal_rowcol[0]
@@ -35,8 +34,6 @@ let Agent_col_0 = Agent_rowcol[1]
 //  column of the agent starting position (0-4)
 //  Initialize Q-table as a 5x5 grid with a single Q-value for each position in the maze
 let Qtable = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]]
-Qtable[goal_row][goal_col] = 10
-// set the reward for hitting the goal
 //  Define possible moves [Up, Down, Left, Right]
 let move_x = [0, 0, -1, 1]
 let move_y = [-1, 1, 0, 0]
@@ -51,6 +48,7 @@ input.onButtonPressed(Button.A, function on_button_pressed_a() {
     let Agent_row: number;
     let Agent_col: number;
     let episode_reward: number;
+    let steps: number;
     let next_Agent_col: number;
     let next_Agent_row: number;
     let next_state: number[];
@@ -70,6 +68,7 @@ input.onButtonPressed(Button.A, function on_button_pressed_a() {
         led.plotBrightness(goal_col, goal_row, 128)
         pause(100 / training_speed)
         // print("Episode " + str(episode + 1) + " Start: " + str(Agent_col) + " " + str(Agent_row) + " Goal: " + str(goal_col) + " " + str(goal_row))
+        steps = 0
         while (Agent_col != goal_col || Agent_row != goal_row) {
             next_Agent_col = 0
             // initialize the next agent position
@@ -95,24 +94,27 @@ input.onButtonPressed(Button.A, function on_button_pressed_a() {
             // update Qvalue
             old_q_value = Qtable[old_Agent_row][old_Agent_col]
             if (next_Agent_col == goal_col && next_Agent_row == goal_row) {
+                Qtable[goal_row][goal_col] = reward
                 new_q_value = old_q_value + alpha * (reward - old_q_value)
             } else {
                 //  Terminal state: no future reward
                 next_max_q = max_q_value(next_Agent_col, next_Agent_row)
-                new_q_value = old_q_value + alpha * (reward + gamma * next_max_q - old_q_value)
+                new_q_value = old_q_value + alpha * (reward + next_max_q - old_q_value)
             }
             
             Qtable[old_Agent_row][old_Agent_col] = Math.round(new_q_value * 100) / 100
+            steps += 1
             if (show_Qtable_after_each_STEP == true) {
+                console.log("Step " + steps + " from (" + old_Agent_row + "," + old_Agent_col + ") to (" + next_Agent_row + "," + next_Agent_col + ")...updated Qvalue for  (" + old_Agent_row + "," + old_Agent_col + ") is " + new_q_value)
                 show_Qtable()
                 
                 is_paused = true
             }
             
+            update_agent_position(old_Agent_col, old_Agent_row, next_Agent_col, next_Agent_row)
             while (is_paused == true) {
                 pause(1000)
             }
-            update_agent_position(old_Agent_col, old_Agent_row, next_Agent_col, next_Agent_row)
             Agent_col = next_Agent_col
             Agent_row = next_Agent_row
         }
@@ -148,12 +150,10 @@ function get_valid_random_move(Agent_col: number, Agent_row: number): number[] {
             return next_state
         }
         
-        // print(i + ": Random move rejected: [" + str(Agent_col) + "][" + str(Agent_row) + "] to [" + str(proposed_x) + "][" + str(proposed_y) + "]")
         attempts += 1
     }
 }
 
-//  Fallback: return a valid move if all attempts fail
 //  Function to get a valid greedy move (allows walls)
 function get_valid_greedy_move(Agent_col: number, Agent_row: number): number[] {
     let proposed_Agent_col: number;
@@ -185,11 +185,11 @@ function get_valid_greedy_move(Agent_col: number, Agent_row: number): number[] {
 
 //  On button B run the optimal path
 input.onButtonPressed(Button.B, function on_button_pressed_b() {
-    let old_x: number;
-    let old_y: number;
     let next_state: number[];
     let next_Agent_col: number;
     let next_Agent_row: number;
+    let old_Agent_col: number;
+    let old_Agent_row: number;
     let reward: number;
     let Agent_col = Agent_col_0
     let Agent_row = Agent_row_0
@@ -198,16 +198,22 @@ input.onButtonPressed(Button.B, function on_button_pressed_b() {
     pause(500)
     let steps = 0
     while (Agent_col != goal_col || Agent_row != goal_row) {
-        old_x = Agent_col
-        //  Store current position
-        old_y = Agent_row
-        next_state = get_valid_greedy_move(Agent_col, Agent_row)
+        if (maze[Agent_row][Agent_col] == 1) {
+            next_state = [old_Agent_col, old_Agent_row]
+        } else {
+            // if hitting a wall force return to previous position
+            next_state = get_valid_greedy_move(Agent_col, Agent_row)
+        }
+        
         next_Agent_col = next_state[0]
         next_Agent_row = next_state[1]
+        old_Agent_col = Agent_col
+        //  Store current position
+        old_Agent_row = Agent_row
         reward = get_reward(next_Agent_col, next_Agent_row)
         episode_reward += reward
         // count the total reward for the intelligent run
-        update_agent_position(old_x, old_y, next_Agent_col, next_Agent_row)
+        update_agent_position(old_Agent_col, old_Agent_row, next_Agent_col, next_Agent_row)
         pause(500)
         Agent_col = next_Agent_col
         Agent_row = next_Agent_row
@@ -247,7 +253,7 @@ function get_reward(new_x: number, new_y: number): number {
     if (new_x == goal_col && new_y == goal_row) {
         reward = 10
     } else if (maze[new_y][new_x] == 1) {
-        reward = -10
+        reward = -5
     } else {
         reward = -1
     }
